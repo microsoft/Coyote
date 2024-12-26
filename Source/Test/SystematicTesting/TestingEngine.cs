@@ -268,7 +268,8 @@ namespace Microsoft.Coyote.SystematicTesting
 
             if (this.Configuration.IsTelemetryEnabled)
             {
-                this.TrackTelemetry();
+                // 10 seconds should be enough, any more than that and too bad.
+                this.TrackTelemetry().Wait(10000, this.CancellationTokenSource.Token);
             }
         }
 
@@ -626,25 +627,16 @@ namespace Microsoft.Coyote.SystematicTesting
         /// <summary>
         /// Tracks anonymized telemetry data.
         /// </summary>
-        private void TrackTelemetry()
+        private async Task TrackTelemetry()
         {
             bool isReplaying = this.Scheduler.IsReplaying;
-            TelemetryClient.TrackEvent(isReplaying ? "replay" : "test");
-            if (Debugger.IsAttached)
-            {
-                TelemetryClient.TrackEvent(isReplaying ? "replay-debug" : "test-debug");
-            }
-            else
-            {
-                TelemetryClient.TrackMetric(isReplaying ? "replay-time" : "test-time", this.Profiler.Results());
-            }
-
-            if (this.TestReport != null && this.TestReport.NumOfFoundBugs > 0)
-            {
-                TelemetryClient.TrackMetric(isReplaying ? "replay-bugs" : "test-bugs", this.TestReport.NumOfFoundBugs);
-            }
-
-            TelemetryClient.Flush();
+            await TelemetryClient.TrackEvent(
+                action: Debugger.IsAttached ?
+                    (isReplaying ? "debug-replay" : "debug-test") :
+                    (isReplaying ? "replay" : "test"),
+                result: (this.TestReport.NumOfFoundBugs > 0) ? "failed" : "passed",
+                bugsFound: this.TestReport?.NumOfFoundBugs,
+                testTime: this.Profiler?.Results());
         }
 
         /// <summary>

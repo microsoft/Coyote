@@ -3,12 +3,9 @@
 
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
-using Microsoft.ApplicationInsights.DataContracts;
-using Microsoft.ApplicationInsights.Extensibility;
+using System.Threading.Tasks;
 using Microsoft.Coyote.Logging;
-using AppInsightsClient = Microsoft.ApplicationInsights.TelemetryClient;
 
 namespace Microsoft.Coyote.Telemetry
 {
@@ -20,6 +17,9 @@ namespace Microsoft.Coyote.Telemetry
     /// </remarks>
     internal class TelemetryClient
     {
+        private const string ApiSecret = "eOkUmW73T9Wv5TUynCLAEA";
+        private const string MeasurementId = "G-JS8YSYVDQX";
+
         /// <summary>
         /// Path to the Coyote home directory where the UUID is stored.
         /// </summary>
@@ -43,11 +43,6 @@ namespace Microsoft.Coyote.Telemetry
         private static TelemetryClient Current;
 
         /// <summary>
-        /// The App Insights client.
-        /// </summary>
-        private readonly AppInsightsClient Client;
-
-        /// <summary>
         /// Responsible for writing to the installed <see cref="ILogger"/>.
         /// </summary>
         private readonly LogWriter LogWriter;
@@ -58,35 +53,26 @@ namespace Microsoft.Coyote.Telemetry
         private readonly bool IsEnabled;
 
         /// <summary>
+        /// A unique id for this user on this device.
+        /// </summary>
+        private string DeviceId;
+
+        /// <summary>
+        /// The coyote version.
+        /// </summary>
+        private readonly string Version;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="TelemetryClient"/> class.
         /// </summary>
         private TelemetryClient(LogWriter logWriter, bool isEnabled)
         {
+            this.IsEnabled = isEnabled;
             if (isEnabled)
             {
-                TelemetryConfiguration configuration = TelemetryConfiguration.CreateDefault();
-                configuration.InstrumentationKey = "17a6badb-bf2d-4f5d-959b-6843b8bb1f7f";
-                this.Client = new AppInsightsClient(configuration);
+                this.Version = typeof(Runtime.CoyoteRuntime).Assembly.GetName().Version.ToString();
                 this.LogWriter = logWriter;
-
-                string version = typeof(Runtime.CoyoteRuntime).Assembly.GetName().Version.ToString();
-                this.Client.Context.GlobalProperties["coyote"] = version;
-#if NETFRAMEWORK
-                this.Client.Context.GlobalProperties["dotnet"] = ".NET Framework";
-#else
-                this.Client.Context.GlobalProperties["dotnet"] = RuntimeInformation.FrameworkDescription;
-#endif
-                this.Client.Context.Device.Id = GetOrCreateDeviceId(out bool isFirstTime);
-                this.Client.Context.Device.OperatingSystem = Environment.OSVersion.Platform.ToString();
-                this.Client.Context.Session.Id = Guid.NewGuid().ToString();
-
-                if (isFirstTime)
-                {
-                    this.TrackEvent("welcome");
-                }
             }
-
-            this.IsEnabled = isEnabled;
         }
 
         /// <summary>
@@ -105,66 +91,64 @@ namespace Microsoft.Coyote.Telemetry
         /// <summary>
         /// Tracks the specified telemetry event.
         /// </summary>
-        internal void TrackEvent(string name)
+        internal Task TrackEvent(string action, string result, int? bugsFound, double? testTime)
         {
             if (this.IsEnabled)
             {
-                lock (SyncObject)
-                {
-                    try
-                    {
-                        this.LogWriter.LogDebug("[coyote::telemetry] Tracking event: {0}.", name);
-                        this.Client.TrackEvent(new EventTelemetry(name));
-                    }
-                    catch (Exception ex)
-                    {
-                        this.LogWriter.LogDebug("[coyote::telemetry] Unable to send event: {0}", ex.Message);
-                    }
-                }
-            }
-        }
+                Task task = Task.CompletedTask;
 
-        /// <summary>
-        /// Tracks the specified telemetry metric.
-        /// </summary>
-        internal void TrackMetric(string name, double value)
-        {
-            if (this.IsEnabled)
-            {
-                lock (SyncObject)
+                if (string.IsNullOrEmpty(this.DeviceId))
                 {
-                    try
+                    this.DeviceId = GetOrCreateDeviceId(out bool isFirstTime);
+                    if (isFirstTime)
                     {
-                        this.LogWriter.LogDebug("[coyote::telemetry] Tracking metric: {0}={1}.", name, value);
-                        this.Client.TrackMetric(new MetricTelemetry(name, value));
-                    }
-                    catch (Exception ex)
-                    {
-                        this.LogWriter.LogDebug("[coyote::telemetry] Unable to send metric: {0}", ex.Message);
+                        task = this.TrackEvent("welcome", null, null, null);
                     }
                 }
-            }
-        }
 
-        /// <summary>
-        /// Flushes any buffered in-memory telemetry data.
-        /// </summary>
-        internal void Flush()
-        {
-            if (this.IsEnabled)
-            {
-                lock (SyncObject)
+                try
                 {
-                    try
+                    var analytics = new Analytics()
                     {
-                        this.Client.Flush();
-                    }
-                    catch (Exception ex)
+                        ApiSecret = ApiSecret,
+                        MeasurementId = MeasurementId,
+                        ClientId = this.DeviceId
+                    };
+
+                    var m = new TestEventMeasurement()
                     {
-                        this.LogWriter.LogDebug("[coyote::telemetry] Error flushing: {0}", ex.Message);
+                        Action = action,
+                        Result = result
+                    };
+
+                    m.Coyote = this.Version;
+
+                    if (bugsFound.HasValue)
+                    {
+                        m.Bugs = bugsFound.Value;
                     }
+
+                    if (testTime.HasValue)
+                    {
+                        m.TestTime = testTime.Value;
+                    }
+
+                    analytics.Events.Add(m);
+
+                    this.LogWriter.LogDebug("[coyote::telemetry] Tracking event: {0}.", action);
+
+                    // handy for debugging errors from google.
+                    // var response = HttpProtocol.ValidateMeasurements(analytics).Result;
+
+                    return Task.WhenAll(task, HttpProtocol.PostMeasurements(analytics));
+                }
+                catch (Exception ex)
+                {
+                    this.LogWriter.LogDebug("[coyote::telemetry] Unable to send event: {0}", ex.Message);
                 }
             }
+
+            return Task.CompletedTask;
         }
 
         /// <summary>

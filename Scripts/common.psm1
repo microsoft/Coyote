@@ -38,19 +38,21 @@ function Invoke-DotnetBuild([String]$dotnet, [String]$solution, [String]$config,
     Write-Comment -prefix "..." -text "Building $solution"
 
     $platform = "/p:Platform=`"Any CPU`""
-    $restore_command = "restore $solution"
-    $build_command = "build -c $config $solution --no-restore"
+    $restore_command = "restore $solution $platform"
+    $build_command = "build -c $config $solution --no-restore  $platform"
     if ($local -and $nuget) {
         $nuget_config_file = "$PSScriptRoot/../NuGet.config"
-        $restore_command = "$restore_command --configfile $nuget_config_file /p:UseLocalNugetPackages=true $platform"
-        $build_command = "$build_command /p:UseLocalNugetPackages=true $platform"
+        $restore_command = "$restore_command --configfile $nuget_config_file /p:UseLocalNugetPackages=true"
+        $build_command = "$build_command /p:UseLocalNugetPackages=true"
     } elseif ($local) {
         $nuget_config_file = "$PSScriptRoot/../Samples/NuGet.config"
-        $restore_command = "$restore_command --configfile $nuget_config_file /p:UseLocalCoyote=true $platform"
-        $build_command = "$build_command /p:UseLocalCoyote=true $platform"
+        $restore_command = "$restore_command --configfile $nuget_config_file /p:UseLocalCoyote=true"
+        $build_command = "$build_command /p:UseLocalCoyote=true"
     }
 
+    Write-Host $restore_command
     Invoke-ToolCommand -tool $dotnet -cmd $restore_command -error_msg "Failed to restore $solution"
+    Write-Host $build_command
     Invoke-ToolCommand -tool $dotnet -cmd $build_command -error_msg "Failed to build $solution"
 }
 

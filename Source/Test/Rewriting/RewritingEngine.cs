@@ -7,10 +7,6 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
-using Microsoft.ApplicationInsights;
-using Microsoft.ApplicationInsights.Channel;
-using Microsoft.ApplicationInsights.DataContracts;
-using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Coyote.Logging;
 using Microsoft.Coyote.Runtime;
 using Mono.Cecil;
@@ -320,11 +316,7 @@ namespace Microsoft.Coyote.Rewriting
             foreach (var type in new Type[]
                 {
                     typeof(CoyoteRuntime),
-                    typeof(RewritingEngine),
-                    typeof(TelemetryConfiguration),
-                    typeof(EventTelemetry),
-                    typeof(ITelemetry),
-                    typeof(TelemetryClient)
+                    typeof(RewritingEngine)
                 })
             {
                 string assemblyPath = type.Assembly.Location;
