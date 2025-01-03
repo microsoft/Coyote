@@ -430,6 +430,13 @@ namespace Microsoft.Coyote.Rewriting.Types.Threading
             }
 
             /// <summary>
+            /// Called to clear out the cache of synchronized blocks in cases where an iteration
+            /// may have been aborted and the cache is no longer valid, and may even hold old
+            /// values that would otherwise not get cleaned up and could impact future iterations.
+            /// </summary>
+            internal static void ResetCache () => Cache.Clear();
+
+            /// <summary>
             /// Creates a new <see cref="SynchronizedBlock"/> for synchronizing access
             /// to the specified object and enters the lock.
             /// </summary>

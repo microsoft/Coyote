@@ -21,6 +21,8 @@ using Microsoft.Coyote.Runtime;
 using Microsoft.Coyote.Telemetry;
 using Microsoft.Coyote.Visualization;
 
+using SynchronizedBlock = Microsoft.Coyote.Rewriting.Types.Threading.Monitor.SynchronizedBlock;
+
 namespace Microsoft.Coyote.SystematicTesting
 {
     /// <summary>
@@ -201,6 +203,9 @@ namespace Microsoft.Coyote.SystematicTesting
 
             // Create a client for gathering and sending optional telemetry data.
             TelemetryClient = TelemetryClient.GetOrCreate(this.Configuration, this.LogWriter);
+
+            // Register to clean up the Monitor SynchronizedBlock cache.
+            this.RegisterEndIterationCallBack(_ => SynchronizedBlock.ResetCache());
         }
 
         /// <summary>
