@@ -82,7 +82,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Download Coyote binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: coyote-binaries
           path: ./bin
